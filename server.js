@@ -83,7 +83,7 @@ app.post("/api/chat", async (req, res) => {
             maxOutputTokens: 1200
           }
         }),
-        signal: AbortSignal.timeout(25000)
+        signal: AbortSignal.timeout(60000)
       });
 
       const payload = await upstream.json().catch(() => ({}));
