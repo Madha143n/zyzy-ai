@@ -1,0 +1,11 @@
+{
+  "name": "ZYZY AI Agent",
+  "short_name": "ZYZY",
+  "description": "Futuristic personal AI assistant prototype",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#070b18",
+  "theme_color": "#070b18",
+  "orientation": "portrait"
+}

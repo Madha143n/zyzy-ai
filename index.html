@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070b18"><meta name="description" content="ZYZY futuristic personal assistant prototype">
+<link rel="manifest" href="./manifest.webmanifest"><link rel="icon" href="./icon.svg"><link rel="stylesheet" href="./styles.css">
+<title>ZYZY — AI Core</title>
+</head>
+<body>
+<div class="ambient a1"></div><div class="ambient a2"></div>
+<header class="topbar">
+  <a class="brand" href="#" aria-label="ZYZY home"><span class="brandmark">Z<span>Y</span></span><span><b>ZYZY</b><small>PERSONAL AI CORE</small></span></a>
+  <div class="topright"><span class="live"><i></i> LOCAL MODE</span><button class="avatar" aria-label="Profile">Z</button></div>
+</header>
+<main class="wrap">
+  <section class="welcome">
+    <div class="eyebrow"><span class="spark">✦</span> YOUR INTELLIGENCE SPACE</div>
+    <h1>Think beyond.<br><span>Command your world.</span></h1>
+    <p>One place for your ideas, plans and daily tasks.</p>
+  </section>
+  <section class="core-panel">
+    <div class="core-head"><span><i class="pulse"></i> ZYZY CORE</span><span id="coreState">STANDBY</span></div>
+    <button id="orb" class="orb-wrap" aria-label="Start voice input">
+      <span class="orbit orbit1"></span><span class="orbit orbit2"></span><span class="orb"><span class="orb-z">Z</span><span class="orb-shine"></span></span>
+    </button>
+    <div class="core-copy"><h2 id="coreTitle">Ready when you are.</h2><p id="coreDesc">Tap the core to try voice input, or type below.</p></div>
+    <div class="voice-row"><button id="micBtn" class="voice-btn"><span>⌁</span> Start listening</button><span class="mic-hint">MIC ACCESS REQUIRED</span></div>
+  </section>
+  <section class="command-card">
+    <label for="command">GIVE ZYZY A TASK <span>↘</span></label>
+    <div class="inputrow"><textarea id="command" rows="2" placeholder="Tell me what you want to do…"></textarea><button id="runBtn" aria-label="Run command">➜</button></div>
+    <div id="result" class="result hidden" aria-live="polite"></div>
+  </section>
+  <section class="section-title"><div><div class="eyebrow">YOUR TOOLKIT</div><h2>Agent modules</h2></div><span class="muted">04 MODULES</span></section>
+  <section class="grid">
+    <button class="module" data-agent="Business"><span class="module-icon">◈</span><span class="module-text"><b>Business</b><small>Plan ideas & workflows</small></span><span class="arrow">↗</span></button>
+    <button class="module" data-agent="Social Media"><span class="module-icon">✳</span><span class="module-text"><b>Creator Studio</b><small>Scripts, captions & content</small></span><span class="arrow">↗</span></button>
+    <button class="module" data-agent="Personal Assistant"><span class="module-icon">◷</span><span class="module-text"><b>Personal</b><small>Tasks & daily planning</small></span><span class="arrow">↗</span></button>
+    <button class="module" data-agent="Trading Monitor"><span class="module-icon">⌁</span><span class="module-text"><b>Market Watch</b><small>Notes & risk checklist</small></span><span class="arrow">↗</span></button>
+  </section>
+  <section class="lower-grid">
+    <section class="panel"><div class="panel-head"><div><div class="eyebrow">STAY ON TRACK</div><h2>My tasks</h2></div><span id="taskCount" class="counter">0</span></div>
+      <form id="taskForm"><input id="taskInput" placeholder="Add a task…" maxlength="180" aria-label="Add a task"><button type="submit">+</button></form><div id="tasks" class="empty">Your task space is clear.</div>
+    </section>
+    <section class="panel"><div class="panel-head"><div><div class="eyebrow">SYSTEM TRACE</div><h2>Recent activity</h2></div><button id="clearLog" class="text-btn">Clear</button></div><div id="activity" class="empty">Waiting for your first command.</div></section>
+  </section>
+  <section class="notice"><span>ⓘ</span><p><b>Prototype status</b><br>ZYZY currently runs local demo logic. AI API, always-on wake word, background actions, phone control and automatic uploads are not connected yet. The market module never places trades.</p></section>
+  <footer><span>ZYZY / AI CORE</span><span>BUILD 0.3 • FUTURE STARTS HERE</span></footer>
+</main>
+<script src="./app.js"></script>
+<script>if("serviceWorker"in navigator&&location.protocol.startsWith("http"))addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));</script>
+</body></html>
