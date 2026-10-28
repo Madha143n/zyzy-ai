@@ -1,4 +1,3 @@
-
 const $ = id => document.getElementById(id);
 const KEY = "zyzy-future-v03";
 
@@ -18,6 +17,8 @@ try {
 if (!Array.isArray(state.tasks)) state.tasks = [];
 if (!Array.isArray(state.activity)) state.activity = [];
 if (!Array.isArray(state.chatHistory)) state.chatHistory = [];
+
+let isRunning = false;
 
 const esc = s =>
   String(s).replace(/[&<>"']/g, c => ({
@@ -44,6 +45,127 @@ function log(title, detail) {
   state.activity = state.activity.slice(0, 10);
 }
 
+function injectChatMemoryUi() {
+  if ($("zyzy-chat-styles")) return;
+
+  const style = document.createElement("style");
+  style.id = "zyzy-chat-styles";
+  style.textContent = `
+    .chat-memory-panel {
+      margin-top: 12px;
+      overflow: hidden;
+    }
+
+    .chat-history-list {
+      max-height: 280px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+    }
+
+    .chat-message {
+      margin: 0 0 10px;
+      padding: 10px 11px;
+      border: 1px solid #263754;
+      border-radius: 12px;
+      background: #0a1120;
+      font-size: 10px;
+      line-height: 1.55;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+    }
+
+    .chat-message:last-child {
+      margin-bottom: 0;
+    }
+
+    .chat-message.assistant {
+      border-color: #315d79;
+      background: #111f34;
+    }
+
+    .chat-role {
+      display: block;
+      margin-bottom: 5px;
+      color: #7cecff;
+      font-size: 8px;
+      font-weight: 800;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+    }
+
+    .chat-message.user .chat-role {
+      color: #9baaff;
+    }
+  `;
+  document.head.appendChild(style);
+
+  if ($("chatMemoryPanel")) return;
+
+  const commandCard = document.querySelector(".command-card");
+  if (!commandCard) return;
+
+  const panel = document.createElement("section");
+  panel.className = "panel chat-memory-panel";
+  panel.id = "chatMemoryPanel";
+
+  panel.innerHTML = `
+    <div class="panel-head">
+      <div>
+        <div class="eyebrow">MEMORY</div>
+        <h2>Conversation</h2>
+      </div>
+      <button id="clearChat" class="text-btn" type="button">
+        Clear chat
+      </button>
+    </div>
+    <div id="chatHistoryList" class="chat-history-list empty">
+      No conversation saved yet.
+    </div>
+  `;
+
+  commandCard.after(panel);
+
+  $("clearChat").addEventListener("click", () => {
+    const ok = window.confirm(
+      "Boss, clear the saved ZYZY conversation?"
+    );
+
+    if (!ok) return;
+
+    state.chatHistory = [];
+    log("Conversation memory cleared", "Saved chat was removed.");
+    save();
+  });
+}
+
+function renderChatHistory() {
+  injectChatMemoryUi();
+
+  const box = $("chatHistoryList");
+  if (!box) return;
+
+  const messages = state.chatHistory.slice(-10);
+
+  if (!messages.length) {
+    box.className = "chat-history-list empty";
+    box.textContent = "No conversation saved yet.";
+    return;
+  }
+
+  box.className = "chat-history-list";
+
+  box.innerHTML = messages.map(m => `
+    <div class="chat-message ${m.role === "user" ? "user" : "assistant"}">
+      <span class="chat-role">
+        ${m.role === "user" ? "Boss" : "ZYZY"}
+      </span>
+      ${esc(m.content)}
+    </div>
+  `).join("");
+
+  box.scrollTop = box.scrollHeight;
+}
+
 function route(t) {
   const s = t.toLowerCase();
 
@@ -59,55 +181,9 @@ function route(t) {
   return "Business";
 }
 
-function draft(agent, input) {
-  if (agent === "Social Media") {
-    return `CREATOR STUDIO
-
-Suggested workflow:
-• Pick the audience and goal.
-• Draft a hook, main message and ending.
-• Review accuracy and copyright before publishing.
-
-Request: ${input}
-
-This is a local template. A generative AI service is not connected yet.`;
-  }
-
-  if (agent === "Trading Monitor") {
-    return `MARKET WATCH
-
-Trading is disabled. Use this module for watchlist notes and a risk checklist only. This is not financial advice and no live market data is connected.
-
-Request: ${input}`;
-  }
-
-  if (agent === "Personal Assistant") {
-    state.tasks.unshift({
-      id: Date.now(),
-      text: input,
-      done: false
-    });
-
-    return `PERSONAL
-
-Saved as a task on this device. No reminder notification is scheduled, and tasks will not run in the background.
-
-${input}`;
-  }
-
-  return `BUSINESS
-
-1. Define the outcome.
-2. Break it into small steps.
-3. List resources and risks.
-4. Review before taking external action.
-
-Request: ${input}
-
-This is a local planning template; an AI model is not connected yet.`;
-}
-
 async function run() {
+  if (isRunning) return;
+
   const input = $("command").value.trim();
   const r = $("result");
 
@@ -118,8 +194,11 @@ async function run() {
     return;
   }
 
+  isRunning = true;
   const agent = route(input);
+
   $("runBtn").disabled = true;
+  $("coreState").textContent = "THINKING";
   $("coreTitle").textContent = "Thinking, Boss…";
   $("coreDesc").textContent = "ZYZY is preparing a response.";
   r.textContent = "Thinking…";
@@ -157,7 +236,8 @@ async function run() {
       );
     }
 
-    const reply = data.reply || "Sorry, Boss. I couldn't get a response.";
+    const reply =
+      data.reply || "Sorry, Boss. I couldn't get a response.";
 
     state.chatHistory.push(
       { role: "user", content: input },
@@ -167,6 +247,7 @@ async function run() {
     state.chatHistory = state.chatHistory.slice(-24);
 
     r.textContent = reply;
+    $("coreState").textContent = "READY";
     $("coreTitle").textContent = `${agent} ready`;
     $("coreDesc").textContent = "ZYZY has replied, Boss.";
 
@@ -191,6 +272,7 @@ async function run() {
       "Sorry, Boss. " + err.message +
       "\nPlease check the backend connection and try again.";
 
+    $("coreState").textContent = "STANDBY";
     $("coreTitle").textContent = "Connection issue";
     $("coreDesc").textContent =
       "ZYZY couldn't complete this request.";
@@ -198,6 +280,7 @@ async function run() {
     log("ZYZY connection error", err.message);
     save();
   } finally {
+    isRunning = false;
     $("runBtn").disabled = false;
   }
 }
@@ -351,6 +434,9 @@ function render() {
         </div>
       `).join("")
     : '<div class="empty">Waiting for your first command.</div>';
+
+  renderChatHistory();
 }
 
+injectChatMemoryUi();
 render();
