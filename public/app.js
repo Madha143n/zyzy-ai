@@ -5,7 +5,8 @@ let state = {
   tasks: [],
   activity: [],
   chatHistory: [],
-  archivedChats: []
+  archivedChats: [],
+  voiceLang: "en-IN"
 };
 
 try {
@@ -19,8 +20,11 @@ if (!Array.isArray(state.tasks)) state.tasks = [];
 if (!Array.isArray(state.activity)) state.activity = [];
 if (!Array.isArray(state.chatHistory)) state.chatHistory = [];
 if (!Array.isArray(state.archivedChats)) state.archivedChats = [];
+if (typeof state.voiceLang !== "string") state.voiceLang = "en-IN";
 
 let isRunning = false;
+let isSpeaking = false;
+let voiceAutoSendTimer = null;
 
 const esc = s =>
   String(s).replace(/[&<>"']/g, c => ({
@@ -112,6 +116,37 @@ function injectChatMemoryUi() {
       background: #162744;
       color: #cfe7ff;
     }
+
+    .voice-controls {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 10px;
+    }
+
+    .voice-pill {
+      border: 1px solid #365074;
+      border-radius: 20px;
+      padding: 6px 9px;
+      background: #101c31;
+      color: #aecaef;
+      font-size: 8px;
+      font-weight: 800;
+      letter-spacing: .6px;
+    }
+
+    .voice-pill.active {
+      border-color: #6cecff88;
+      color: #7cecff;
+      background: #183050;
+    }
+
+    .voice-pill.stop {
+      color: #ffb4c0;
+      border-color: #7b3f54;
+      background: #2b1523;
+    }
   `;
   document.head.appendChild(style);
 
@@ -185,6 +220,126 @@ function injectChatMemoryUi() {
   });
 }
 
+function setCoreState(value) {
+  const el = $("coreState");
+  if (el) el.textContent = value;
+}
+
+function injectVoiceControls() {
+  if ($("voiceControls")) return;
+
+  const voiceRow = document.querySelector(".voice-row");
+  if (!voiceRow) return;
+
+  const controls = document.createElement("div");
+  controls.className = "voice-controls";
+  controls.id = "voiceControls";
+
+  controls.innerHTML = `
+    <button class="voice-pill" type="button" data-lang="en-IN">
+      ENGLISH
+    </button>
+    <button class="voice-pill" type="button" data-lang="ta-IN">
+      தமிழ்
+    </button>
+    <button id="stopVoice" class="voice-pill stop" type="button">
+      STOP VOICE
+    </button>
+  `;
+
+  voiceRow.after(controls);
+
+  controls.querySelectorAll("[data-lang]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.voiceLang = btn.dataset.lang === "ta-IN"
+        ? "ta-IN"
+        : "en-IN";
+      log("Voice language changed", state.voiceLang);
+      save();
+    });
+  });
+
+  $("stopVoice").addEventListener("click", () => {
+    stopSpeaking();
+    setCoreState("STANDBY");
+    $("coreTitle").textContent = "Voice stopped";
+    $("coreDesc").textContent =
+      "Boss, ZYZY stopped speaking. Type or speak your next message.";
+  });
+
+  updateVoiceButtons();
+}
+
+function updateVoiceButtons() {
+  const controls = $("voiceControls");
+  if (!controls) return;
+
+  controls.querySelectorAll("[data-lang]").forEach(btn => {
+    btn.classList.toggle(
+      "active",
+      btn.dataset.lang === state.voiceLang
+    );
+  });
+}
+
+function stopSpeaking() {
+  if ("speechSynthesis" in window) {
+    speechSynthesis.cancel();
+  }
+
+  isSpeaking = false;
+}
+
+function speakReply(text) {
+  if (!("speechSynthesis" in window)) {
+    $("coreTitle").textContent = "Voice output unavailable";
+    $("coreDesc").textContent =
+      "Boss, this browser does not support text-to-speech.";
+    return;
+  }
+
+  stopSpeaking();
+
+  const cleanText = String(text || "")
+    .replace(/```[\s\S]*?```/g, "Code block.")
+    .replace(/https?:\/\/\S+/g, "Link.")
+    .slice(0, 450);
+
+  const utterance = new SpeechSynthesisUtterance(cleanText);
+
+  utterance.lang = state.voiceLang === "ta-IN"
+    ? "ta-IN"
+    : "en-IN";
+  utterance.rate = 1;
+  utterance.pitch = 1;
+
+  utterance.onstart = () => {
+    isSpeaking = true;
+    setCoreState("SPEAKING");
+    $("coreTitle").textContent = "Speaking, Boss…";
+    $("coreDesc").textContent =
+      "Tap Stop Voice to interrupt ZYZY.";
+  };
+
+  utterance.onend = () => {
+    isSpeaking = false;
+    setCoreState("STANDBY");
+    $("coreTitle").textContent = "Ready when you are.";
+    $("coreDesc").textContent =
+      "Boss, you can type or tap Start listening.";
+  };
+
+  utterance.onerror = () => {
+    isSpeaking = false;
+    setCoreState("STANDBY");
+    $("coreTitle").textContent = "Voice playback issue";
+    $("coreDesc").textContent =
+      "Boss, text is still available. Try another browser or voice.";
+  };
+
+  speechSynthesis.speak(utterance);
+}
+
 function renderChatHistory() {
   injectChatMemoryUi();
 
@@ -243,6 +398,7 @@ async function run() {
   }
 
   isRunning = true;
+  stopSpeaking();
 
   const agent = route(submittedInput);
   inputEl.value = "";
@@ -304,19 +460,7 @@ async function run() {
     log("ZYZY response → " + agent, submittedInput);
     save();
 
-    if ("speechSynthesis" in window) {
-      speechSynthesis.cancel();
-
-      const utterance = new SpeechSynthesisUtterance(
-        reply.slice(0, 450)
-      );
-
-      utterance.lang = "en-IN";
-      utterance.rate = 1;
-      utterance.pitch = 1;
-
-      speechSynthesis.speak(utterance);
-    }
+    speakReply(reply);
   } catch (err) {
     inputEl.value = submittedInput;
 
@@ -347,27 +491,40 @@ function listen() {
     $("coreTitle").textContent = "Voice input unavailable";
     $("coreDesc").textContent =
       "Boss, this browser doesn't support speech recognition. Please type instead.";
+    setCoreState("STANDBY");
     return;
   }
 
+  stopSpeaking();
+  clearTimeout(voiceAutoSendTimer);
+
   const rec = new SR();
-  rec.lang = "en-IN";
+  rec.lang = state.voiceLang === "ta-IN"
+    ? "ta-IN"
+    : "en-IN";
   rec.interimResults = false;
   rec.maxAlternatives = 1;
 
   $("orb").classList.add("listening");
-  $("coreState").textContent = "LISTENING";
+  setCoreState("LISTENING");
   $("coreTitle").textContent = "Listening, Boss…";
   $("coreDesc").textContent =
-    "Speak clearly, then wait for the transcript.";
+    state.voiceLang === "ta-IN"
+      ? "Speak in Tamil or Tanglish. ZYZY will respond shortly."
+      : "Speak clearly. ZYZY will respond shortly.";
 
   rec.onresult = e => {
-    $("command").value =
-      e.results[0][0].transcript;
+    const transcript = e.results[0][0].transcript;
+    $("command").value = transcript;
 
     $("coreTitle").textContent = "Voice captured";
     $("coreDesc").textContent =
-      "Boss, tap the arrow to send your command.";
+      "Boss, ZYZY is sending your voice message now.";
+    setCoreState("THINKING");
+
+    voiceAutoSendTimer = setTimeout(() => {
+      run();
+    }, 500);
   };
 
   rec.onerror = e => {
@@ -375,11 +532,15 @@ function listen() {
     $("coreDesc").textContent =
       "Check microphone permission or type your command. (" +
       e.error + ")";
+    setCoreState("STANDBY");
   };
 
   rec.onend = () => {
     $("orb").classList.remove("listening");
-    $("coreState").textContent = "STANDBY";
+
+    if (!isRunning) {
+      setCoreState("STANDBY");
+    }
   };
 
   try {
@@ -388,6 +549,8 @@ function listen() {
     $("coreTitle").textContent = "Try again, Boss";
     $("coreDesc").textContent =
       "Voice recognition could not start. Please type instead.";
+    $("orb").classList.remove("listening");
+    setCoreState("STANDBY");
   }
 }
 
@@ -490,7 +653,9 @@ function render() {
     : '<div class="empty">Waiting for your first command.</div>';
 
   renderChatHistory();
+  updateVoiceButtons();
 }
 
 injectChatMemoryUi();
+injectVoiceControls();
 render();
