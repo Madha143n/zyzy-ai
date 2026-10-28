@@ -4,7 +4,8 @@ const KEY = "zyzy-future-v03";
 let state = {
   tasks: [],
   activity: [],
-  chatHistory: []
+  chatHistory: [],
+  archivedChats: []
 };
 
 try {
@@ -17,6 +18,7 @@ try {
 if (!Array.isArray(state.tasks)) state.tasks = [];
 if (!Array.isArray(state.activity)) state.activity = [];
 if (!Array.isArray(state.chatHistory)) state.chatHistory = [];
+if (!Array.isArray(state.archivedChats)) state.archivedChats = [];
 
 let isRunning = false;
 
@@ -96,6 +98,20 @@ function injectChatMemoryUi() {
     .chat-message.user .chat-role {
       color: #9baaff;
     }
+
+    .chat-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .chat-actions .text-btn {
+      border: 1px solid #365074;
+      border-radius: 7px;
+      padding: 5px 7px;
+      background: #162744;
+      color: #cfe7ff;
+    }
   `;
   document.head.appendChild(style);
 
@@ -114,9 +130,14 @@ function injectChatMemoryUi() {
         <div class="eyebrow">MEMORY</div>
         <h2>Conversation</h2>
       </div>
-      <button id="clearChat" class="text-btn" type="button">
-        Clear chat
-      </button>
+      <div class="chat-actions">
+        <button id="newChat" class="text-btn" type="button">
+          New chat
+        </button>
+        <button id="clearHistory" class="text-btn" type="button">
+          Clear history
+        </button>
+      </div>
     </div>
     <div id="chatHistoryList" class="chat-history-list empty">
       No conversation saved yet.
@@ -125,15 +146,41 @@ function injectChatMemoryUi() {
 
   commandCard.after(panel);
 
-  $("clearChat").addEventListener("click", () => {
+  $("newChat").addEventListener("click", () => {
+    if (!state.chatHistory.length) {
+      state.chatHistory = [];
+      save();
+      return;
+    }
+
+    const firstUserMessage =
+      state.chatHistory.find(m => m.role === "user")?.content ||
+      "Saved conversation";
+
+    state.archivedChats.unshift({
+      id: Date.now(),
+      title: firstUserMessage.slice(0, 50),
+      createdAt: new Date().toISOString(),
+      messages: state.chatHistory.slice(-24)
+    });
+
+    state.archivedChats = state.archivedChats.slice(0, 5);
+    state.chatHistory = [];
+
+    log("New chat started", "Previous conversation was archived.");
+    save();
+  });
+
+  $("clearHistory").addEventListener("click", () => {
     const ok = window.confirm(
-      "Boss, clear the saved ZYZY conversation?"
+      "Boss, clear the active conversation and archived chats?"
     );
 
     if (!ok) return;
 
     state.chatHistory = [];
-    log("Conversation memory cleared", "Saved chat was removed.");
+    state.archivedChats = [];
+    log("Conversation history cleared", "Saved chat was removed.");
     save();
   });
 }
@@ -184,18 +231,21 @@ function route(t) {
 async function run() {
   if (isRunning) return;
 
-  const input = $("command").value.trim();
+  const inputEl = $("command");
+  const submittedInput = inputEl.value.trim();
   const r = $("result");
 
   r.classList.remove("hidden");
 
-  if (!input) {
+  if (!submittedInput) {
     r.textContent = "Boss, type or speak a command first.";
     return;
   }
 
   isRunning = true;
-  const agent = route(input);
+
+  const agent = route(submittedInput);
+  inputEl.value = "";
 
   $("runBtn").disabled = true;
   $("coreState").textContent = "THINKING";
@@ -222,7 +272,7 @@ async function run() {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        message: input,
+        message: submittedInput,
         agent,
         history
       })
@@ -240,7 +290,7 @@ async function run() {
       data.reply || "Sorry, Boss. I couldn't get a response.";
 
     state.chatHistory.push(
-      { role: "user", content: input },
+      { role: "user", content: submittedInput },
       { role: "assistant", content: reply }
     );
 
@@ -251,7 +301,7 @@ async function run() {
     $("coreTitle").textContent = `${agent} ready`;
     $("coreDesc").textContent = "ZYZY has replied, Boss.";
 
-    log("ZYZY response → " + agent, input);
+    log("ZYZY response → " + agent, submittedInput);
     save();
 
     if ("speechSynthesis" in window) {
@@ -268,6 +318,8 @@ async function run() {
       speechSynthesis.speak(utterance);
     }
   } catch (err) {
+    inputEl.value = submittedInput;
+
     r.textContent =
       "Sorry, Boss. " + err.message +
       "\nPlease check the backend connection and try again.";
@@ -282,6 +334,7 @@ async function run() {
   } finally {
     isRunning = false;
     $("runBtn").disabled = false;
+    inputEl.focus();
   }
 }
 
@@ -343,7 +396,8 @@ $("micBtn").addEventListener("click", listen);
 $("orb").addEventListener("click", listen);
 
 $("command").addEventListener("keydown", e => {
-  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
     run();
   }
 });
