@@ -1,5 +1,6 @@
-const $ = id => document.getElementById(id);
-const KEY = "zyzy-future-v03";
+const $ = (id) => document.getElementById(id);
+const STORAGE_KEY = "zyzy-jarvis-v6";
+const LEGACY_STORAGE_KEY = "zyzy-future-v03";
 
 let state = {
   tasks: [],
@@ -9,277 +10,175 @@ let state = {
   voiceLang: "en-IN"
 };
 
-try {
-  state = Object.assign(
-    state,
-    JSON.parse(localStorage.getItem(KEY) || "{}")
-  );
-} catch {}
+function loadState() {
+  let stored = null;
 
-if (!Array.isArray(state.tasks)) state.tasks = [];
-if (!Array.isArray(state.activity)) state.activity = [];
-if (!Array.isArray(state.chatHistory)) state.chatHistory = [];
-if (!Array.isArray(state.archivedChats)) state.archivedChats = [];
-if (typeof state.voiceLang !== "string") state.voiceLang = "en-IN";
+  try {
+    stored =
+      localStorage.getItem(STORAGE_KEY) ||
+      localStorage.getItem(LEGACY_STORAGE_KEY);
+  } catch {}
+
+  try {
+    if (stored) {
+      state = Object.assign(state, JSON.parse(stored));
+    }
+  } catch {}
+
+  if (!Array.isArray(state.tasks)) state.tasks = [];
+  if (!Array.isArray(state.activity)) state.activity = [];
+  if (!Array.isArray(state.chatHistory)) state.chatHistory = [];
+  if (!Array.isArray(state.archivedChats)) state.archivedChats = [];
+  if (typeof state.voiceLang !== "string") state.voiceLang = "en-IN";
+}
+
+loadState();
 
 let isRunning = false;
+let isResearching = false;
 let isSpeaking = false;
 let voiceAutoSendTimer = null;
 
-const esc = s =>
-  String(s).replace(/[&<>"']/g, c => ({
+const escapeHtml = (value) =>
+  String(value).replace(/[&<>"']/g, (char) => ({
     "&": "&amp;",
     "<": "&lt;",
     ">": "&gt;",
     '"': "&quot;",
     "'": "&#39;"
-  }[c]));
+  }[char]));
+
+function setCoreState(value) {
+  $("coreState").textContent = value;
+}
+
+function setHealth(text, type = "") {
+  const badge = $("healthBadge");
+  badge.textContent = text;
+  badge.className = `status-badge ${type}`.trim();
+}
 
 function save() {
   try {
-    localStorage.setItem(KEY, JSON.stringify(state));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch {}
+
   render();
 }
 
 function log(title, detail) {
   state.activity.unshift({
     title,
-    detail,
+    detail: String(detail || "").slice(0, 180),
     time: new Date().toLocaleString()
   });
+
   state.activity = state.activity.slice(0, 10);
 }
 
-function injectChatMemoryUi() {
-  if ($("zyzy-chat-styles")) return;
+function routeAgent(text) {
+  const value = String(text || "").toLowerCase();
 
-  const style = document.createElement("style");
-  style.id = "zyzy-chat-styles";
-  style.textContent = `
-    .chat-memory-panel {
-      margin-top: 12px;
-      overflow: hidden;
-    }
+  if (/research|latest|current news|source|links|web search/.test(value))
+    return "Research Assistant";
 
-    .chat-history-list {
-      max-height: 280px;
-      overflow-y: auto;
-      scrollbar-width: thin;
-    }
+  if (/code|debug|javascript|python|node|express|api|database|sql|git/.test(value))
+    return "Coding Assistant";
 
-    .chat-message {
-      margin: 0 0 10px;
-      padding: 10px 11px;
-      border: 1px solid #263754;
-      border-radius: 12px;
-      background: #0a1120;
-      font-size: 10px;
-      line-height: 1.55;
-      overflow-wrap: anywhere;
-      white-space: pre-wrap;
-    }
+  if (/youtube|instagram|facebook|caption|reel|video|script|thumbnail|content calendar/.test(value))
+    return "Creator Studio";
 
-    .chat-message:last-child {
-      margin-bottom: 0;
-    }
+  if (/stock|share market|trading|crypto|portfolio|nifty|market/.test(value))
+    return "Market Watch";
 
-    .chat-message.assistant {
-      border-color: #315d79;
-      background: #111f34;
-    }
+  if (/business|customer|marketing|seo|startup|freelance|plan/.test(value))
+    return "Business Assistant";
 
-    .chat-role {
-      display: block;
-      margin-bottom: 5px;
-      color: #7cecff;
-      font-size: 8px;
-      font-weight: 800;
-      letter-spacing: 1.2px;
-      text-transform: uppercase;
-    }
-
-    .chat-message.user .chat-role {
-      color: #9baaff;
-    }
-
-    .chat-actions {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-
-    .chat-actions .text-btn {
-      border: 1px solid #365074;
-      border-radius: 7px;
-      padding: 5px 7px;
-      background: #162744;
-      color: #cfe7ff;
-    }
-
-    .voice-controls {
-      display: flex;
-      justify-content: center;
-      flex-wrap: wrap;
-      gap: 7px;
-      margin-top: 10px;
-    }
-
-    .voice-pill {
-      border: 1px solid #365074;
-      border-radius: 20px;
-      padding: 6px 9px;
-      background: #101c31;
-      color: #aecaef;
-      font-size: 8px;
-      font-weight: 800;
-      letter-spacing: .6px;
-    }
-
-    .voice-pill.active {
-      border-color: #6cecff88;
-      color: #7cecff;
-      background: #183050;
-    }
-
-    .voice-pill.stop {
-      color: #ffb4c0;
-      border-color: #7b3f54;
-      background: #2b1523;
-    }
-  `;
-  document.head.appendChild(style);
-
-  if ($("chatMemoryPanel")) return;
-
-  const commandCard = document.querySelector(".command-card");
-  if (!commandCard) return;
-
-  const panel = document.createElement("section");
-  panel.className = "panel chat-memory-panel";
-  panel.id = "chatMemoryPanel";
-
-  panel.innerHTML = `
-    <div class="panel-head">
-      <div>
-        <div class="eyebrow">MEMORY</div>
-        <h2>Conversation</h2>
-      </div>
-      <div class="chat-actions">
-        <button id="newChat" class="text-btn" type="button">
-          New chat
-        </button>
-        <button id="clearHistory" class="text-btn" type="button">
-          Clear history
-        </button>
-      </div>
-    </div>
-    <div id="chatHistoryList" class="chat-history-list empty">
-      No conversation saved yet.
-    </div>
-  `;
-
-  commandCard.after(panel);
-
-  $("newChat").addEventListener("click", () => {
-    if (!state.chatHistory.length) {
-      state.chatHistory = [];
-      save();
-      return;
-    }
-
-    const firstUserMessage =
-      state.chatHistory.find(m => m.role === "user")?.content ||
-      "Saved conversation";
-
-    state.archivedChats.unshift({
-      id: Date.now(),
-      title: firstUserMessage.slice(0, 50),
-      createdAt: new Date().toISOString(),
-      messages: state.chatHistory.slice(-24)
-    });
-
-    state.archivedChats = state.archivedChats.slice(0, 5);
-    state.chatHistory = [];
-
-    log("New chat started", "Previous conversation was archived.");
-    save();
-  });
-
-  $("clearHistory").addEventListener("click", () => {
-    const ok = window.confirm(
-      "Boss, clear the active conversation and archived chats?"
-    );
-
-    if (!ok) return;
-
-    state.chatHistory = [];
-    state.archivedChats = [];
-    log("Conversation history cleared", "Saved chat was removed.");
-    save();
-  });
+  return "Personal Assistant";
 }
 
-function setCoreState(value) {
-  const el = $("coreState");
-  if (el) el.textContent = value;
+function validMessages(messages) {
+  return (Array.isArray(messages) ? messages : [])
+    .filter((message) =>
+      message &&
+      ["user", "assistant"].includes(message.role) &&
+      typeof message.content === "string"
+    )
+    .slice(-12)
+    .map((message) => ({
+      role: message.role,
+      content: message.content.slice(0, 3000)
+    }));
 }
 
-function injectVoiceControls() {
-  if ($("voiceControls")) return;
+function renderChatHistory() {
+  const box = $("chatHistoryList");
+  const messages = state.chatHistory.slice(-24);
 
-  const voiceRow = document.querySelector(".voice-row");
-  if (!voiceRow) return;
+  if (!messages.length) {
+    box.className = "chat-history empty";
+    box.textContent = "No conversation saved yet.";
+    return;
+  }
 
-  const controls = document.createElement("div");
-  controls.className = "voice-controls";
-  controls.id = "voiceControls";
+  box.className = "chat-history";
+  box.innerHTML = messages.map((message) => `
+    <article class="chat-message ${message.role === "user" ? "user" : "assistant"}">
+      <span class="chat-role">${message.role === "user" ? "Boss" : "ZYZY"}</span>
+      ${escapeHtml(message.content)}
+    </article>
+  `).join("");
 
-  controls.innerHTML = `
-    <button class="voice-pill" type="button" data-lang="en-IN">
-      ENGLISH
-    </button>
-    <button class="voice-pill" type="button" data-lang="ta-IN">
-      தமிழ்
-    </button>
-    <button id="stopVoice" class="voice-pill stop" type="button">
-      STOP VOICE
-    </button>
-  `;
+  box.scrollTop = box.scrollHeight;
+}
 
-  voiceRow.after(controls);
+function renderTasks() {
+  $("taskCount").textContent = state.tasks.filter((task) => !task.done).length;
 
-  controls.querySelectorAll("[data-lang]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      state.voiceLang = btn.dataset.lang === "ta-IN"
-        ? "ta-IN"
-        : "en-IN";
-      log("Voice language changed", state.voiceLang);
-      save();
-    });
-  });
+  if (!state.tasks.length) {
+    $("tasks").innerHTML = '<div class="empty">Your task space is clear.</div>';
+    return;
+  }
 
-  $("stopVoice").addEventListener("click", () => {
-    stopSpeaking();
-    setCoreState("STANDBY");
-    $("coreTitle").textContent = "Voice stopped";
-    $("coreDesc").textContent =
-      "Boss, ZYZY stopped speaking. Type or speak your next message.";
-  });
+  $("tasks").innerHTML = state.tasks.map((task) => `
+    <article class="entry">
+      <label class="checkline ${task.done ? "done" : ""}">
+        <input type="checkbox" data-task-action="toggle" data-task-id="${task.id}" ${task.done ? "checked" : ""}>
+        <span>${escapeHtml(task.text)}</span>
+      </label>
+      <div class="entry-actions">
+        <button type="button" data-task-action="delete" data-task-id="${task.id}">Remove</button>
+      </div>
+    </article>
+  `).join("");
+}
 
-  updateVoiceButtons();
+function renderActivity() {
+  if (!state.activity.length) {
+    $("activity").innerHTML = '<div class="empty">Waiting for your first action.</div>';
+    return;
+  }
+
+  $("activity").innerHTML = state.activity.map((item) => `
+    <article class="entry">
+      <strong>${escapeHtml(item.title)}</strong>
+      <div>${escapeHtml(item.detail)}</div>
+      <div class="sub">${escapeHtml(item.time)}</div>
+    </article>
+  `).join("");
 }
 
 function updateVoiceButtons() {
-  const controls = $("voiceControls");
-  if (!controls) return;
-
-  controls.querySelectorAll("[data-lang]").forEach(btn => {
-    btn.classList.toggle(
-      "active",
-      btn.dataset.lang === state.voiceLang
-    );
+  document.querySelectorAll("[data-lang]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.lang === state.voiceLang);
   });
+}
+
+function render() {
+  renderChatHistory();
+  renderTasks();
+  renderActivity();
+  updateVoiceButtons();
 }
 
 function stopSpeaking() {
@@ -290,97 +189,66 @@ function stopSpeaking() {
   isSpeaking = false;
 }
 
+function chooseVoice(lang) {
+  if (!("speechSynthesis" in window)) return null;
+
+  const prefix = lang === "ta-IN" ? "ta" : "en";
+  const voices = speechSynthesis.getVoices();
+
+  return (
+    voices.find((voice) => voice.lang && voice.lang.toLowerCase().startsWith(prefix)) ||
+    voices.find((voice) => voice.default) ||
+    null
+  );
+}
+
 function speakReply(text) {
   if (!("speechSynthesis" in window)) {
     $("coreTitle").textContent = "Voice output unavailable";
-    $("coreDesc").textContent =
-      "Boss, this browser does not support text-to-speech.";
+    $("coreDesc").textContent = "Boss, text-to-speech is not supported on this browser.";
     return;
   }
 
   stopSpeaking();
 
-  const cleanText = String(text || "")
-    .replace(/```[\s\S]*?```/g, "Code block.")
-    .replace(/https?:\/\/\S+/g, "Link.")
+  const spokenText = String(text || "")
+    .replace(/```[\s\S]*?```/g, " Code block. ")
+    .replace(/https?:\/\/\S+/g, " Link. ")
+    .replace(/[#*_`>\[\]|-]{2,}/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
     .slice(0, 450);
 
-  const utterance = new SpeechSynthesisUtterance(cleanText);
-
-  utterance.lang = state.voiceLang === "ta-IN"
-    ? "ta-IN"
-    : "en-IN";
+  const utterance = new SpeechSynthesisUtterance(spokenText);
+  utterance.lang = state.voiceLang;
   utterance.rate = 1;
   utterance.pitch = 1;
+
+  const voice = chooseVoice(state.voiceLang);
+  if (voice) utterance.voice = voice;
 
   utterance.onstart = () => {
     isSpeaking = true;
     setCoreState("SPEAKING");
     $("coreTitle").textContent = "Speaking, Boss…";
-    $("coreDesc").textContent =
-      "Tap Stop Voice to interrupt ZYZY.";
+    $("coreDesc").textContent = "Tap Stop Voice to interrupt ZYZY.";
   };
 
   utterance.onend = () => {
     isSpeaking = false;
     setCoreState("STANDBY");
     $("coreTitle").textContent = "Ready when you are.";
-    $("coreDesc").textContent =
-      "Boss, you can type or tap Start listening.";
+    $("coreDesc").textContent = "Boss, you can type or start listening.";
   };
 
   utterance.onerror = () => {
     isSpeaking = false;
     setCoreState("STANDBY");
     $("coreTitle").textContent = "Voice playback issue";
-    $("coreDesc").textContent =
-      "Boss, text is still available. Try another browser or voice.";
+    $("coreDesc").textContent = "The text response is still available. Try another voice or browser.";
   };
 
   speechSynthesis.speak(utterance);
-}
-
-function renderChatHistory() {
-  injectChatMemoryUi();
-
-  const box = $("chatHistoryList");
-  if (!box) return;
-
-  const messages = state.chatHistory.slice(-10);
-
-  if (!messages.length) {
-    box.className = "chat-history-list empty";
-    box.textContent = "No conversation saved yet.";
-    return;
-  }
-
-  box.className = "chat-history-list";
-
-  box.innerHTML = messages.map(m => `
-    <div class="chat-message ${m.role === "user" ? "user" : "assistant"}">
-      <span class="chat-role">
-        ${m.role === "user" ? "Boss" : "ZYZY"}
-      </span>
-      ${esc(m.content)}
-    </div>
-  `).join("");
-
-  box.scrollTop = box.scrollHeight;
-}
-
-function route(t) {
-  const s = t.toLowerCase();
-
-  if (/stock|share market|trading|trade|crypto|portfolio/.test(s))
-    return "Trading Monitor";
-
-  if (/youtube|instagram|facebook|caption|reel|video|script|social media|post/.test(s))
-    return "Social Media";
-
-  if (/remind|reminder|todo|to-do|task|routine|schedule|daily/.test(s))
-    return "Personal Assistant";
-
-  return "Business";
 }
 
 async function run() {
@@ -388,45 +256,33 @@ async function run() {
 
   const inputEl = $("command");
   const submittedInput = inputEl.value.trim();
-  const r = $("result");
+  const resultEl = $("result");
 
-  r.classList.remove("hidden");
+  resultEl.classList.remove("hidden");
 
   if (!submittedInput) {
-    r.textContent = "Boss, type or speak a command first.";
+    resultEl.textContent = "Boss, type or speak a command first.";
     return;
   }
 
   isRunning = true;
   stopSpeaking();
+  clearTimeout(voiceAutoSendTimer);
 
-  const agent = route(submittedInput);
+  const agent = routeAgent(submittedInput);
   inputEl.value = "";
 
   $("runBtn").disabled = true;
-  $("coreState").textContent = "THINKING";
+  setCoreState("THINKING");
   $("coreTitle").textContent = "Thinking, Boss…";
   $("coreDesc").textContent = "ZYZY is preparing a response.";
-  r.textContent = "Thinking…";
+  resultEl.textContent = "Thinking…";
 
   try {
-    const history = state.chatHistory
-      .filter(m =>
-        m &&
-        ["user", "assistant"].includes(m.role) &&
-        typeof m.content === "string"
-      )
-      .slice(-12)
-      .map(m => ({
-        role: m.role,
-        content: m.content.slice(0, 3000)
-      }));
-
+    const history = validMessages(state.chatHistory);
     const response = await fetch("/api/chat", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         message: submittedInput,
         agent,
@@ -437,43 +293,35 @@ async function run() {
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      throw new Error(
-        data.error || `AI request failed (${response.status}).`
-      );
+      throw new Error(data.error || `AI request failed (${response.status}).`);
     }
 
-    const reply =
-      data.reply || "Sorry, Boss. I couldn't get a response.";
+    const reply = data.reply || "Sorry, Boss. I couldn't get a response.";
 
     state.chatHistory.push(
       { role: "user", content: submittedInput },
       { role: "assistant", content: reply }
     );
-
     state.chatHistory = state.chatHistory.slice(-24);
 
-    r.textContent = reply;
-    $("coreState").textContent = "READY";
-    $("coreTitle").textContent = `${agent} ready`;
-    $("coreDesc").textContent = "ZYZY has replied, Boss.";
+    resultEl.textContent = reply;
+    setCoreState("READY");
+    $("coreTitle").textContent = `${data.agent || agent} ready`;
+    $("coreDesc").textContent = `ZYZY replied using ${data.model || "Gemini"}.`;
 
-    log("ZYZY response → " + agent, submittedInput);
+    log(`ZYZY response → ${agent}`, submittedInput);
     save();
-
     speakReply(reply);
-  } catch (err) {
+  } catch (error) {
     inputEl.value = submittedInput;
+    resultEl.textContent =
+      `Sorry, Boss. ${error.message}\nPlease check the connection and try again.`;
 
-    r.textContent =
-      "Sorry, Boss. " + err.message +
-      "\nPlease check the backend connection and try again.";
-
-    $("coreState").textContent = "STANDBY";
+    setCoreState("STANDBY");
     $("coreTitle").textContent = "Connection issue";
-    $("coreDesc").textContent =
-      "ZYZY couldn't complete this request.";
+    $("coreDesc").textContent = "ZYZY couldn't complete this request.";
 
-    log("ZYZY connection error", err.message);
+    log("ZYZY connection error", error.message);
     save();
   } finally {
     isRunning = false;
@@ -483,14 +331,12 @@ async function run() {
 }
 
 function listen() {
-  const SR =
-    window.SpeechRecognition ||
-    window.webkitSpeechRecognition;
+  const SpeechRecognition =
+    window.SpeechRecognition || window.webkitSpeechRecognition;
 
-  if (!SR) {
+  if (!SpeechRecognition) {
     $("coreTitle").textContent = "Voice input unavailable";
-    $("coreDesc").textContent =
-      "Boss, this browser doesn't support speech recognition. Please type instead.";
+    $("coreDesc").textContent = "Boss, this browser does not support speech recognition. Please type instead.";
     setCoreState("STANDBY");
     return;
   }
@@ -498,87 +344,294 @@ function listen() {
   stopSpeaking();
   clearTimeout(voiceAutoSendTimer);
 
-  const rec = new SR();
-  rec.lang = state.voiceLang === "ta-IN"
-    ? "ta-IN"
-    : "en-IN";
-  rec.interimResults = false;
-  rec.maxAlternatives = 1;
+  const recognition = new SpeechRecognition();
+  recognition.lang = state.voiceLang;
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
 
   $("orb").classList.add("listening");
   setCoreState("LISTENING");
   $("coreTitle").textContent = "Listening, Boss…";
-  $("coreDesc").textContent =
-    state.voiceLang === "ta-IN"
-      ? "Speak in Tamil or Tanglish. ZYZY will respond shortly."
-      : "Speak clearly. ZYZY will respond shortly.";
+  $("coreDesc").textContent = state.voiceLang === "ta-IN"
+    ? "Speak in Tamil or Tanglish. ZYZY will respond shortly."
+    : "Speak clearly. ZYZY will respond shortly.";
 
-  rec.onresult = e => {
-    const transcript = e.results[0][0].transcript;
+  recognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript;
     $("command").value = transcript;
 
     $("coreTitle").textContent = "Voice captured";
-    $("coreDesc").textContent =
-      "Boss, ZYZY is sending your voice message now.";
+    $("coreDesc").textContent = "Boss, ZYZY is sending your voice message now.";
     setCoreState("THINKING");
 
-    voiceAutoSendTimer = setTimeout(() => {
-      run();
-    }, 500);
+    voiceAutoSendTimer = setTimeout(run, 500);
   };
 
-  rec.onerror = e => {
+  recognition.onerror = (event) => {
     $("coreTitle").textContent = "Couldn't hear you";
-    $("coreDesc").textContent =
-      "Check microphone permission or type your command. (" +
-      e.error + ")";
+    $("coreDesc").textContent = `Check microphone permission or type instead. (${event.error})`;
     setCoreState("STANDBY");
   };
 
-  rec.onend = () => {
+  recognition.onend = () => {
     $("orb").classList.remove("listening");
-
-    if (!isRunning) {
-      setCoreState("STANDBY");
-    }
+    if (!isRunning) setCoreState("STANDBY");
   };
 
   try {
-    rec.start();
+    recognition.start();
   } catch {
-    $("coreTitle").textContent = "Try again, Boss";
-    $("coreDesc").textContent =
-      "Voice recognition could not start. Please type instead.";
     $("orb").classList.remove("listening");
+    $("coreTitle").textContent = "Try again, Boss";
+    $("coreDesc").textContent = "Voice recognition could not start. Please type instead.";
     setCoreState("STANDBY");
   }
+}
+
+async function runResearch() {
+  if (isResearching) return;
+
+  const input = $("researchInput");
+  const query = input.value.trim();
+  const output = $("researchOutput");
+
+  if (!query) {
+    output.className = "research-output empty";
+    output.textContent = "Boss, type a research question first.";
+    return;
+  }
+
+  isResearching = true;
+  $("researchBtn").disabled = true;
+  output.className = "research-output empty";
+  output.textContent = "Researching…";
+
+  try {
+    const response = await fetch("/api/research", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query })
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(data.error || `Research failed (${response.status}).`);
+    }
+
+    output.className = "research-output";
+    output.replaceChildren();
+
+    if (!data.results || !data.results.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = data.warning || "No usable research results were returned.";
+      output.appendChild(empty);
+      return;
+    }
+
+    const intro = document.createElement("div");
+    intro.className = "entry";
+    intro.textContent = `Live research results from ${data.provider || "configured provider"}:`;
+    output.appendChild(intro);
+
+    data.results.forEach((item) => {
+      const article = document.createElement("article");
+      article.className = "research-item";
+
+      const link = document.createElement("a");
+      link.href = item.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = item.title;
+
+      const content = document.createElement("p");
+      content.textContent = item.content;
+
+      article.append(link, content);
+      output.appendChild(article);
+    });
+
+    log("Live research completed", query);
+    save();
+  } catch (error) {
+    output.className = "research-output empty";
+    output.textContent = error.message;
+  } finally {
+    isResearching = false;
+    $("researchBtn").disabled = false;
+  }
+}
+
+async function loadHealth() {
+  setHealth("Checking", "");
+
+  try {
+    const response = await fetch("/api/health", { cache: "no-store" });
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) throw new Error("Health check failed");
+
+    $("modelName").textContent = data.model || "Not configured";
+    $("fallbackName").textContent = data.fallbackModel || "Not configured";
+    $("researchState").textContent = data.researchConfigured ? "Configured" : "Not configured";
+    $("apiState").textContent = data.apiKeyConfigured ? "Server only" : "Missing";
+
+    setHealth(
+      data.apiKeyConfigured ? "Online" : "Needs key",
+      data.apiKeyConfigured ? "ok" : "error"
+    );
+  } catch {
+    $("modelName").textContent = "Unavailable";
+    $("fallbackName").textContent = "Unavailable";
+    $("researchState").textContent = "Unavailable";
+    $("apiState").textContent = "Unknown";
+    setHealth("Offline", "error");
+  }
+}
+
+function openExternalLink(url) {
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.target = "_blank";
+  anchor.rel = "noopener noreferrer";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
 }
 
 $("runBtn").addEventListener("click", run);
 $("micBtn").addEventListener("click", listen);
 $("orb").addEventListener("click", listen);
+$("researchBtn").addEventListener("click", runResearch);
+$("stopVoice").addEventListener("click", () => {
+  stopSpeaking();
+  setCoreState("STANDBY");
+  $("coreTitle").textContent = "Voice stopped";
+  $("coreDesc").textContent = "Boss, ZYZY stopped speaking.";
+});
 
-$("command").addEventListener("keydown", e => {
-  if (e.key === "Enter" && !e.shiftKey) {
-    e.preventDefault();
+document.querySelectorAll("[data-lang]").forEach((button) => {
+  button.addEventListener("click", () => {
+    state.voiceLang = button.dataset.lang === "ta-IN" ? "ta-IN" : "en-IN";
+    log("Voice language changed", state.voiceLang);
+    save();
+  });
+});
+
+document.querySelectorAll(".module-card").forEach((card) => {
+  card.addEventListener("click", () => {
+    const prompts = {
+      "Personal Assistant": "Help me plan my day and organize my tasks",
+      "Creator Studio": "Create an original YouTube video script with title and captions",
+      "Business Assistant": "Help me validate a business idea and plan the next steps",
+      "Research Assistant": "Research the latest developments in artificial intelligence",
+      "Coding Assistant": "Explain how to build and test a secure Node.js API",
+      "Market Watch": "Create a market watchlist and risk checklist"
+    };
+
+    const agent = card.dataset.agent;
+    $("command").value = prompts[agent] || "Hello, ZYZY";
+    $("command").focus();
+    $("command").scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+});
+
+document.querySelectorAll(".quick-link").forEach((button) => {
+  button.addEventListener("click", () => {
+    openExternalLink(button.dataset.url);
+    log("Android quick link opened", button.dataset.url);
+    save();
+  });
+});
+
+$("command").addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
     run();
   }
 });
 
-$("taskForm").addEventListener("submit", e => {
-  e.preventDefault();
+$("researchInput").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    runResearch();
+  }
+});
 
-  const t = $("taskInput").value.trim();
-  if (!t) return;
+$("taskForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+
+  const input = $("taskInput");
+  const text = input.value.trim();
+
+  if (!text) return;
 
   state.tasks.unshift({
     id: Date.now(),
-    text: t,
+    text,
     done: false
   });
 
-  log("Task added", t);
-  $("taskInput").value = "";
+  input.value = "";
+  log("Task added", text);
+  save();
+});
+
+$("tasks").addEventListener("click", (event) => {
+  const control = event.target.closest("[data-task-action]");
+  if (!control) return;
+
+  const id = Number(control.dataset.taskId);
+  const action = control.dataset.taskAction;
+  const task = state.tasks.find((item) => item.id === id);
+  if (!task) return;
+
+  if (action === "toggle") {
+    task.done = !task.done;
+    log(task.done ? "Task completed" : "Task reopened", task.text);
+  }
+
+  if (action === "delete") {
+    state.tasks = state.tasks.filter((item) => item.id !== id);
+    log("Task removed", task.text);
+  }
+
+  save();
+});
+
+$("newChat").addEventListener("click", () => {
+  if (!state.chatHistory.length) {
+    save();
+    return;
+  }
+
+  const firstUserMessage =
+    state.chatHistory.find((message) => message.role === "user")?.content ||
+    "Saved conversation";
+
+  state.archivedChats.unshift({
+    id: Date.now(),
+    title: firstUserMessage.slice(0, 50),
+    createdAt: new Date().toISOString(),
+    messages: state.chatHistory.slice(-24)
+  });
+
+  state.archivedChats = state.archivedChats.slice(0, 5);
+  state.chatHistory = [];
+
+  log("New chat started", "Previous conversation was archived.");
+  save();
+});
+
+$("clearHistory").addEventListener("click", () => {
+  const ok = window.confirm("Boss, clear the active conversation and archived chats?");
+
+  if (!ok) return;
+
+  state.chatHistory = [];
+  state.archivedChats = [];
+  log("Conversation history cleared", "Saved chat was removed.");
   save();
 });
 
@@ -587,75 +640,11 @@ $("clearLog").addEventListener("click", () => {
   save();
 });
 
-window.toggleTask = id => {
-  const t = state.tasks.find(x => x.id === id);
-
-  if (t) {
-    t.done = !t.done;
-    log(t.done ? "Task completed" : "Task reopened", t.text);
-    save();
-  }
-};
-
-window.deleteTask = id => {
-  const t = state.tasks.find(x => x.id === id);
-
-  state.tasks = state.tasks.filter(x => x.id !== id);
-
-  if (t) log("Task removed", t.text);
-  save();
-};
-
-document.querySelectorAll(".module").forEach(el => {
-  el.addEventListener("click", () => {
-    const prompts = {
-      Business: "Help me plan a business task",
-      "Social Media": "Draft a YouTube video script",
-      "Personal Assistant": "Help organize my daily tasks",
-      "Trading Monitor": "Create a market watchlist and risk checklist"
-    };
-
-    $("command").value =
-      prompts[el.dataset.agent] || "Hello, ZYZY";
-
-    $("command").focus();
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
   });
-});
-
-function render() {
-  $("taskCount").textContent =
-    state.tasks.filter(t => !t.done).length;
-
-  $("tasks").innerHTML = state.tasks.length
-    ? state.tasks.map(t => `
-        <div class="entry">
-          <label class="checkline ${t.done ? "done" : ""}">
-            <input type="checkbox"
-              ${t.done ? "checked" : ""}
-              onchange="toggleTask(${t.id})">
-            <span>${esc(t.text)}</span>
-          </label>
-          <div class="entry-actions">
-            <button onclick="deleteTask(${t.id})">Remove</button>
-          </div>
-        </div>
-      `).join("")
-    : '<div class="empty">Your task space is clear.</div>';
-
-  $("activity").innerHTML = state.activity.length
-    ? state.activity.map(a => `
-        <div class="entry">
-          <strong>${esc(a.title)}</strong>
-          <div>${esc(a.detail)}</div>
-          <div class="sub">${esc(a.time)}</div>
-        </div>
-      `).join("")
-    : '<div class="empty">Waiting for your first command.</div>';
-
-  renderChatHistory();
-  updateVoiceButtons();
 }
 
-injectChatMemoryUi();
-injectVoiceControls();
 render();
+loadHealth();
