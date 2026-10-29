@@ -1,52 +1,230 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#070b18"><meta name="description" content="ZYZY futuristic personal assistant prototype">
-<link rel="manifest" href="./manifest.webmanifest"><link rel="icon" href="./icon.svg"><link rel="stylesheet" href="./styles.css">
-<title>ZYZY — AI Core</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#050812">
+  <meta name="description" content="ZYZY AI is a natural personal AI assistant for planning, learning, creation, coding, research, and daily productivity.">
+  <title>ZYZY AI — Personal AI Assistant</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-<div class="ambient a1"></div><div class="ambient a2"></div>
-<header class="topbar">
-  <a class="brand" href="#" aria-label="ZYZY home"><span class="brandmark">Z<span>Y</span></span><span><b>ZYZY</b><small>PERSONAL AI CORE</small></span></a>
-  <div class="topright"><span class="live"><i></i> LOCAL MODE</span><button class="avatar" aria-label="Profile">Z</button></div>
-</header>
-<main class="wrap">
-  <section class="welcome">
-    <div class="eyebrow"><span class="spark">✦</span> YOUR INTELLIGENCE SPACE</div>
-    <h1>Think beyond.<br><span>Command your world.</span></h1>
-    <p>One place for your ideas, plans and daily tasks.</p>
-  </section>
-  <section class="core-panel">
-    <div class="core-head"><span><i class="pulse"></i> ZYZY CORE</span><span id="coreState">STANDBY</span></div>
-    <button id="orb" class="orb-wrap" aria-label="Start voice input">
-      <span class="orbit orbit1"></span><span class="orbit orbit2"></span><span class="orb"><span class="orb-z">Z</span><span class="orb-shine"></span></span>
-    </button>
-    <div class="core-copy"><h2 id="coreTitle">Ready when you are.</h2><p id="coreDesc">Tap the core to try voice input, or type below.</p></div>
-    <div class="voice-row"><button id="micBtn" class="voice-btn"><span>⌁</span> Start listening</button><span class="mic-hint">MIC ACCESS REQUIRED</span></div>
-  </section>
-  <section class="command-card">
-    <label for="command">GIVE ZYZY A TASK <span>↘</span></label>
-    <div class="inputrow"><textarea id="command" rows="2" placeholder="Tell me what you want to do…"></textarea><button id="runBtn" aria-label="Run command">➜</button></div>
-    <div id="result" class="result hidden" aria-live="polite"></div>
-  </section>
-  <section class="section-title"><div><div class="eyebrow">YOUR TOOLKIT</div><h2>Agent modules</h2></div><span class="muted">04 MODULES</span></section>
-  <section class="grid">
-    <button class="module" data-agent="Business"><span class="module-icon">◈</span><span class="module-text"><b>Business</b><small>Plan ideas & workflows</small></span><span class="arrow">↗</span></button>
-    <button class="module" data-agent="Social Media"><span class="module-icon">✳</span><span class="module-text"><b>Creator Studio</b><small>Scripts, captions & content</small></span><span class="arrow">↗</span></button>
-    <button class="module" data-agent="Personal Assistant"><span class="module-icon">◷</span><span class="module-text"><b>Personal</b><small>Tasks & daily planning</small></span><span class="arrow">↗</span></button>
-    <button class="module" data-agent="Trading Monitor"><span class="module-icon">⌁</span><span class="module-text"><b>Market Watch</b><small>Notes & risk checklist</small></span><span class="arrow">↗</span></button>
-  </section>
-  <section class="lower-grid">
-    <section class="panel"><div class="panel-head"><div><div class="eyebrow">STAY ON TRACK</div><h2>My tasks</h2></div><span id="taskCount" class="counter">0</span></div>
-      <form id="taskForm"><input id="taskInput" placeholder="Add a task…" maxlength="180" aria-label="Add a task"><button type="submit">+</button></form><div id="tasks" class="empty">Your task space is clear.</div>
+  <div class="background-glow glow-one"></div>
+  <div class="background-glow glow-two"></div>
+
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="ZYZY AI home">
+      <span class="brand-mark">Z</span>
+      <span>
+        <strong>ZYZY AI</strong>
+        <small>Personal Agent Workspace</small>
+      </span>
+    </a>
+    <div class="top-actions">
+      <span id="healthBadge" class="status-badge">Checking</span>
+    </div>
+  </header>
+
+  <main class="main-grid">
+    <section class="panel hero-panel" aria-labelledby="coreTitle">
+      <div class="hero-topline">
+        <span class="eyebrow">ZYZY CORE</span>
+        <span id="coreState" class="state-pill">STANDBY</span>
+      </div>
+
+      <button id="orb" class="orb" type="button" aria-label="Start voice input">
+        <span class="orb-ring"></span>
+        <span class="orb-core">Z</span>
+      </button>
+
+      <h1 id="coreTitle">Hey Boss, I’m ready.</h1>
+      <p id="coreDesc" class="hero-desc">
+        Ask ZYZY to plan, learn, create, research, code, or organize your day.
+      </p>
+
+      <div class="voice-actions">
+        <button id="micBtn" class="primary-action" type="button">
+          <span>Start listening</span>
+        </button>
+        <div class="voice-pills" aria-label="Voice language and speech controls">
+          <button class="voice-pill" type="button" data-lang="en-IN">ENGLISH</button>
+          <button class="voice-pill" type="button" data-lang="ta-IN">தமிழ்</button>
+          <button id="stopVoice" class="voice-pill stop-voice" type="button">STOP VOICE</button>
+        </div>
+      </div>
+
+      <div id="result" class="latest-result hidden" aria-live="polite"></div>
+
+      <div class="conversation-card">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">MEMORY</span>
+            <h2>Conversation</h2>
+          </div>
+          <div class="button-row">
+            <button id="newChat" class="ghost-button" type="button">New chat</button>
+            <button id="clearHistory" class="ghost-button danger" type="button">Clear history</button>
+          </div>
+        </div>
+        <div id="chatHistoryList" class="chat-history empty">No conversation saved yet.</div>
+      </div>
+
+      <div class="composer">
+        <label class="sr-only" for="command">Message ZYZY</label>
+        <textarea id="command" rows="3" maxlength="8000" placeholder="Boss, type your message here…"></textarea>
+        <button id="runBtn" class="send-button" type="button" aria-label="Send message">
+          <span>Send</span>
+        </button>
+      </div>
+      <p class="composer-help">Enter sends • Shift + Enter creates a new line</p>
     </section>
-    <section class="panel"><div class="panel-head"><div><div class="eyebrow">SYSTEM TRACE</div><h2>Recent activity</h2></div><button id="clearLog" class="text-btn">Clear</button></div><div id="activity" class="empty">Waiting for your first command.</div></section>
+
+    <aside class="side-stack">
+      <section class="panel system-panel" aria-labelledby="systemTitle">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">SYSTEM</span>
+            <h2 id="systemTitle">AI status</h2>
+          </div>
+        </div>
+        <dl class="status-list">
+          <div>
+            <dt>Primary model</dt>
+            <dd id="modelName">Checking…</dd>
+          </div>
+          <div>
+            <dt>Fallback model</dt>
+            <dd id="fallbackName">Checking…</dd>
+          </div>
+          <div>
+            <dt>Live research</dt>
+            <dd id="researchState">Checking…</dd>
+          </div>
+          <div>
+            <dt>API key</dt>
+            <dd id="apiState">Server only</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="panel android-panel" aria-labelledby="androidTitle">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">ANDROID</span>
+            <h2 id="androidTitle">Quick links</h2>
+          </div>
+        </div>
+        <p class="muted">
+          ZYZY can open supported websites. Deeper Android app automation needs a native app or supported API.
+        </p>
+        <div class="quick-grid">
+          <button class="quick-link" type="button" data-url="https://wa.me/">WhatsApp</button>
+          <button class="quick-link" type="button" data-url="https://www.youtube.com/">YouTube</button>
+          <button class="quick-link" type="button" data-url="https://mail.google.com/">Gmail</button>
+          <button class="quick-link" type="button" data-url="https://www.google.com/">Google</button>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <section class="panel modules-panel" aria-labelledby="modulesTitle">
+    <div class="section-heading">
+      <div>
+        <span class="eyebrow">AGENT MODULES</span>
+        <h2 id="modulesTitle">Choose a workspace</h2>
+      </div>
+      <span class="module-count">06 MODULES</span>
+    </div>
+
+    <div class="module-grid">
+      <button class="module-card" type="button" data-agent="Personal Assistant">
+        <span class="module-icon">◷</span>
+        <strong>Personal Assistant</strong>
+        <span>Tasks, plans, routines, and daily clarity</span>
+      </button>
+      <button class="module-card" type="button" data-agent="Creator Studio">
+        <span class="module-icon">✳</span>
+        <strong>Creator Studio</strong>
+        <span>Scripts, captions, titles, and content plans</span>
+      </button>
+      <button class="module-card" type="button" data-agent="Business Assistant">
+        <span class="module-icon">◇</span>
+        <strong>Business Assistant</strong>
+        <span>Ideas, customers, workflows, and risk checks</span>
+      </button>
+      <button class="module-card" type="button" data-agent="Research Assistant">
+        <span class="module-icon">⌕</span>
+        <strong>Research Assistant</strong>
+        <span>Live search when configured; summaries and links</span>
+      </button>
+      <button class="module-card" type="button" data-agent="Coding Assistant">
+        <span class="module-icon">&lt;/&gt;</span>
+        <strong>Coding Assistant</strong>
+        <span>Explanations, debugging, APIs, and testing steps</span>
+      </button>
+      <button class="module-card" type="button" data-agent="Market Watch">
+        <span class="module-icon">↯</span>
+        <strong>Market Watch</strong>
+        <span>Watchlists and risk checklists; no live trading</span>
+      </button>
+    </div>
   </section>
-  <section class="notice"><span>ⓘ</span><p><b>Prototype status</b><br>ZYZY currently runs local demo logic. AI API, always-on wake word, background actions, phone control and automatic uploads are not connected yet. The market module never places trades.</p></section>
-  <footer><span>ZYZY / AI CORE</span><span>BUILD 0.3 • FUTURE STARTS HERE</span></footer>
-</main>
-<script src="./app.js"></script>
-<script>if("serviceWorker"in navigator&&location.protocol.startsWith("http"))addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));</script>
-</body></html>
+
+  <section class="panel research-panel" aria-labelledby="researchTitle">
+    <div class="section-heading">
+      <div>
+        <span class="eyebrow">RESEARCH</span>
+        <h2 id="researchTitle">Live web search</h2>
+      </div>
+    </div>
+    <p class="muted">
+      This uses a real search integration when <code>SEARCH_API_KEY</code> is configured. Otherwise ZYZY will say live search is unavailable.
+    </p>
+    <div class="research-composer">
+      <label class="sr-only" for="researchInput">Research query</label>
+      <input id="researchInput" maxlength="800" placeholder="Ask for current information…">
+      <button id="researchBtn" class="primary-action" type="button">Research</button>
+    </div>
+    <div id="researchOutput" class="research-output empty">Live research results will appear here.</div>
+  </section>
+
+  <section class="workspace-grid">
+    <section class="panel" aria-labelledby="tasksTitle">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">STAY ON TRACK</span>
+          <h2 id="tasksTitle">My tasks <span id="taskCount" class="count-badge">0</span></h2>
+        </div>
+      </div>
+      <form id="taskForm" class="task-form">
+        <label class="sr-only" for="taskInput">Add task</label>
+        <input id="taskInput" maxlength="140" placeholder="Add a task, Boss…">
+        <button type="submit">Add</button>
+      </form>
+      <div id="tasks" class="item-list"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="activityTitle">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">ACTIVITY</span>
+          <h2 id="activityTitle">Recent actions</h2>
+        </div>
+        <button id="clearLog" class="ghost-button" type="button">Clear</button>
+      </div>
+      <div id="activity" class="item-list compact"></div>
+    </section>
+  </section>
+
+  <footer class="footer-note">
+    <p>
+      ZYZY uses real integrations only. It does not claim live market data, unrestricted Android control, publishing, wake-word support, or cross-device memory unless those services are explicitly configured.
+    </p>
+  </footer>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>
