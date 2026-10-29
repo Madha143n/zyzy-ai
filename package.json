@@ -1,16 +1,17 @@
 {
-  "name": "zyzy-complete-setup",
-  "version": "1.0.0",
-  "private": true,
-  "description": "ZYZY frontend with Node.js Gemini API backend",
+  "name": "zyzy-ai",
+  "version": "2.0.0",
+  "description": "ZYZY AI \u2014 natural personal AI assistant and modular AI workspace.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
     "express": "^5.1.0"
-  }
+  },
+  "license": "MIT"
 }
